@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Коллоквиум АКОС 2026</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .card {
+      width: 100%;
+      max-width: 760px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: 1.8rem;
+      line-height: 1.15;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    input {
+      flex: 1 1 280px;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+      outline: none;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    .meta {
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .timer {
+      margin-bottom: 16px;
+      font-size: 0.98rem;
+      color: var(--text);
+    }
+
+    .timer.overdue {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    ol {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .topic {
+      display: inline-block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      color: var(--accent);
+    }
+
+    .status {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .rules {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tabs button {
+      border-radius: 12px 12px 0 0;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .tabs button:hover {
+      background: var(--bg);
+    }
+
+    .tabs button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    [hidden] { display: none !important; }
+
+    h2 {
+      margin: 24px 0 10px;
+      font-size: 1.15rem;
+    }
+
+    #list h2:first-child { margin-top: 0; }
+
+    #list li { margin-bottom: 8px; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0 4px;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Коллоквиум АКОС, ФКН ВШЭ, ПМИ, 2026</h1>
+
+    <p class="rules">5 минут на 5 случайных вопросов, нужно ответить на любые 4.
+      Каждые начатые 30 секунд сверх 5 минут - штраф 1 балл.</p>
+
+    <nav class="tabs">
+      <button id="tabList" type="button" class="active">Список вопросов</button>
+      <button id="tabTicket" type="button">Проверить себя</button>
+    </nav>
+
+    <section id="list">
+      <div id="listStatus" class="status">Загрузка вопросов...</div>
+    </section>
+
+    <section id="ticketView" hidden>
+    <div class="controls">
+      <input id="seedInput" type="text" placeholder="Введите сид" />
+      <button id="randomBtn" type="button">Другой билет</button>
+    </div>
+
+    <div id="meta" class="meta">Загрузка вопросов...</div>
+    <div id="timer" class="timer"></div>
+    <ol id="ticket"></ol>
+    <div id="status" class="status"></div>
+    </section>
+  </main>
+
+  <script>
+    const seedInput = document.getElementById("seedInput");
+    const randomBtn = document.getElementById("randomBtn");
+    const metaEl = document.getElementById("meta");
+    const timerEl = document.getElementById("timer");
+    const ticketEl = document.getElementById("ticket");
+    const statusEl = document.getElementById("status");
+    const listEl = document.getElementById("list");
+    const listStatusEl = document.getElementById("listStatus");
+    const tabListBtn = document.getElementById("tabList");
+    const tabTicketBtn = document.getElementById("tabTicket");
+    const ticketViewEl = document.getElementById("ticketView");
+    const QUESTIONS_FILE = "questions-caos-ami-2026.txt";
+
+    let topics = [];
+    let timerInterval = null;
+    let generatedAt = null;
+
+    function xmur3(str) {
+      let h = 1779033703 ^ str.length;
+      for (let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
+      }
+      return function () {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+      };
+    }
+
+    function mulberry32(a) {
+      return function () {
+        let t = (a += 0x6D2B79F5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function createRng(seed) {
+      const seedFn = xmur3(String(seed));
+      return mulberry32(seedFn());
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function renderInline(value) {
+      return escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>");
+    }
+
+    function randomInt(maxInclusive) {
+      return Math.floor(Math.random() * (maxInclusive + 1));
+    }
+
+    function formatTime(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+    }
+
+    function parseQuestions(text) {
+      const normalized = text.replace(/\r/g, "").trim();
+      if (!normalized) {
+        throw new Error(`Файл ${QUESTIONS_FILE} пуст.`);
+      }
+
+      const blocks = normalized.split(/\n\s*\n+/);
+      const parsed = blocks.map((block, index) => {
+        const lines = block
+          .split("\n")
+          .map(line => line.trim())
+          .filter(Boolean);
+
+        if (lines.length < 2) {
+          throw new Error(`Блок #${index + 1} должен содержать тему и хотя бы один вопрос.`);
+        }
+
+        const [topic, ...questions] = lines;
+        return { topic, questions };
+      });
+
+      if (parsed.length < 5) {
+        throw new Error("Нужно минимум 5 тем.");
+      }
+
+      return parsed;
+    }
+
+    function buildQuestionPool(topics) {
+      const pool = [];
+      for (const topic of topics) {
+        for (const question of topic.questions) {
+          pool.push({
+            topic: topic.topic,
+            question
+          });
+        }
+      }
+      return pool;
+    }
+
+    function generateTicket(topics, seed) {
+      const rng = createRng(seed);
+      const pool = buildQuestionPool(topics);
+      const usedTopics = new Set();
+      const result = [];
+      let attempts = 0;
+      const maxAttempts = pool.length * 30;
+
+      while (result.length < 5 && attempts < maxAttempts) {
+        attempts++;
+        const item = pool[Math.floor(rng() * pool.length)];
+        if (usedTopics.has(item.topic)) continue;
+        usedTopics.add(item.topic);
+        result.push(item);
+      }
+
+      if (result.length < 5) {
+        throw new Error("Не удалось собрать 5 вопросов из 5 разных тем.");
+      }
+
+      return result;
+    }
+
+    function renderTicket(ticket, seed) {
+      ticketEl.innerHTML = "";
+      for (const item of ticket) {
+        const li = document.createElement("li");
+        li.innerHTML = `<div class="topic">${escapeHtml(item.topic)}</div><div>${renderInline(item.question)}</div>`;
+        ticketEl.appendChild(li);
+      }
+      metaEl.textContent = `Сид: ${seed}`;
+      statusEl.textContent = "";
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    function updateTimerView() {
+      if (!generatedAt) {
+        timerEl.textContent = "";
+        timerEl.classList.remove("overdue");
+        return;
+      }
+
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - generatedAt) / 1000);
+      const limitSeconds = 5 * 60;
+
+      if (elapsedSeconds <= limitSeconds) {
+        const remaining = limitSeconds - elapsedSeconds;
+        timerEl.textContent = `Осталось: ${formatTime(remaining)}`;
+        timerEl.classList.remove("overdue");
+      } else {
+        const overtime = elapsedSeconds - limitSeconds;
+        const penalty = Math.ceil(overtime / 30);
+        timerEl.textContent = `Время вышло: +${formatTime(overtime)} · Штраф: -${penalty} балл${pluralizeBall(penalty)}`;
+        timerEl.classList.add("overdue");
+      }
+    }
+
+    function pluralizeBall(n) {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod10 === 1 && mod100 !== 11) return "";
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "а";
+      return "ов";
+    }
+
+    function startTimer() {
+      stopTimer();
+      generatedAt = Date.now();
+      updateTimerView();
+      timerInterval = setInterval(updateTimerView, 1000);
+    }
+
+    function regenerateFromInput() {
+      try {
+        if (!topics.length) {
+          throw new Error(`${QUESTIONS_FILE} ещё не загружен.`);
+        }
+
+        const seed = seedInput.value.trim() || "0";
+        const ticket = generateTicket(topics, seed);
+        renderTicket(ticket, seed);
+        startTimer();
+      } catch (error) {
+        stopTimer();
+        ticketEl.innerHTML = "";
+        timerEl.textContent = "";
+        timerEl.classList.remove("overdue");
+        statusEl.textContent = error.message;
+      }
+    }
+
+    function setRandomSeedAndGenerate(maxInclusive) {
+      seedInput.value = String(randomInt(maxInclusive));
+      regenerateFromInput();
+    }
+
+    function renderList(topics) {
+      let html = "";
+      let number = 1;
+      for (const topic of topics) {
+        html += `<h2>${escapeHtml(topic.topic)}</h2><ol start="${number}">`;
+        for (const question of topic.questions) {
+          html += `<li>${renderInline(question)}</li>`;
+        }
+        html += "</ol>";
+        number += topic.questions.length;
+      }
+      listEl.innerHTML = html;
+    }
+
+    let ticketShown = false;
+
+    function showTab(name) {
+      const isTicket = name === "ticket";
+      listEl.hidden = isTicket;
+      ticketViewEl.hidden = !isTicket;
+      tabListBtn.classList.toggle("active", !isTicket);
+      tabTicketBtn.classList.toggle("active", isTicket);
+      history.replaceState(null, "", isTicket ? "#ticket" : "#list");
+      if (isTicket && !ticketShown && topics.length) {
+        ticketShown = true;
+        setRandomSeedAndGenerate(1000000);
+      }
+    }
+
+    async function loadQuestions() {
+      try {
+        const response = await fetch("./" + QUESTIONS_FILE, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Не удалось загрузить ${QUESTIONS_FILE}.`);
+        }
+
+        const text = await response.text();
+        topics = parseQuestions(text);
+        statusEl.textContent = "";
+        renderList(topics);
+        showTab(location.hash === "#ticket" ? "ticket" : "list");
+      } catch (error) {
+        metaEl.textContent = "Ошибка";
+        statusEl.textContent = error.message;
+        listStatusEl.textContent = error.message;
+      }
+    }
+
+    seedInput.addEventListener("input", regenerateFromInput);
+    randomBtn.addEventListener("click", () => setRandomSeedAndGenerate(100000));
+    tabListBtn.addEventListener("click", () => showTab("list"));
+    tabTicketBtn.addEventListener("click", () => showTab("ticket"));
+    loadQuestions();
+  </script>
+</body>
+</html>
